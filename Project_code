@@ -1,0 +1,729 @@
+Final Project - DSCI 619 - Image Classification & Sentiment Analysis
+Part I - Image Classification
+# IMPORT LIBRARIES and PACKAGES
+from __future__ import absolute_import, division, print_function, unicode_literals
+from collections import Counter
+
+import os
+import re
+import random
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import PIL #Python Imaging Library
+
+import tensorflow as tf
+import tensorflow.compat.v2 as tf
+import tensorflow_datasets as tfds
+#tfds.disable_progress_bar()
+
+from glob import glob
+from tensorflow import keras
+from tensorflow.keras import datasets, layers, models
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+from IPython.display import display  # display images
+from sklearn import preprocessing
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+
+%matplotlib inline
+WARNING:tensorflow:From C:\Users\uchepyala1\AppData\Local\anaconda3\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+PART I - IMAGE CLASSIFICATION - 3 CNN Models
+AI company has a 2 GB dataset containing over 15,000 images of indoor locations. Originally from MIT, this dataset was built to work on indoor scene recognition. There are 67 categories of JPEG images. The number of images per category varies, but there are at least 100 images for each category.
+
+Data was obtained from: https://www.kaggle.com/itsahmad/indoor-scenes-cvpr-2019
+
+Please download the dataset from the link above and unzip it into a folder.
+
+Assign Path to Previously Downloaded Images or Download Images
+import pathlib
+#set the parent folder that contains the subfolders that are the lables
+img_dir = "C:\\Users\\uchepyala1\\Downloads\\DSCI_419\\indoorCVPR_09\\Images"
+print(f'The indoorCVPR_09 photes are stored in local directory : {img_dir}')
+The indoorCVPR_09 photes are stored in local directory : C:\Users\uchepyala1\Downloads\DSCI_419\indoorCVPR_09\Images
+List the directories to double-check
+total_files = 0
+for root, dirs, files in os.walk(str(img_dir)):
+    level = root.replace(str(img_dir), '').count(os.sep)
+    indent = ' ' * 4 * (level)
+    print(f'{indent}{os.path.basename(root)}/ ({len(files)} files)')
+    total_files += len(files)
+print(f'There are {total_files -1} images in this dataset')
+Images/ (0 files)
+    airport_inside/ (608 files)
+    artstudio/ (140 files)
+    auditorium/ (176 files)
+    bakery/ (405 files)
+    bar/ (604 files)
+    bathroom/ (197 files)
+    bedroom/ (662 files)
+    bookstore/ (380 files)
+    bowling/ (213 files)
+    buffet/ (111 files)
+    casino/ (515 files)
+    children_room/ (112 files)
+    church_inside/ (180 files)
+    classroom/ (113 files)
+    cloister/ (120 files)
+    closet/ (135 files)
+    clothingstore/ (106 files)
+    computerroom/ (114 files)
+    concert_hall/ (103 files)
+    corridor/ (346 files)
+    deli/ (258 files)
+    dentaloffice/ (131 files)
+    dining_room/ (274 files)
+    elevator/ (101 files)
+    fastfood_restaurant/ (116 files)
+    florist/ (103 files)
+    gameroom/ (127 files)
+    garage/ (103 files)
+    greenhouse/ (101 files)
+    grocerystore/ (213 files)
+    gym/ (231 files)
+    hairsalon/ (239 files)
+    hospitalroom/ (101 files)
+    inside_bus/ (102 files)
+    inside_subway/ (457 files)
+    jewelleryshop/ (157 files)
+    kindergarden/ (127 files)
+    kitchen/ (734 files)
+    mall/ (176 files)
+    meeting_room/ (233 files)
+    movietheater/ (175 files)
+    museum/ (168 files)
+    nursery/ (144 files)
+    office/ (109 files)
+    operating_room/ (135 files)
+    pantry/ (384 files)
+    poolinside/ (174 files)
+    prisoncell/ (103 files)
+    restaurant/ (513 files)
+    restaurant_kitchen/ (107 files)
+    shoeshop/ (116 files)
+    stairscase/ (155 files)
+    studiomusic/ (108 files)
+    subway/ (539 files)
+    toystore/ (347 files)
+    trainstation/ (153 files)
+    tv_studio/ (166 files)
+    videostore/ (110 files)
+    waitingroom/ (151 files)
+    warehouse/ (506 files)
+    winecellar/ (269 files)
+There are 14055 images in this dataset
+Get the Indoor Image label using the Image directory
+IndoorImage_dir = [ name for name in list(os.listdir(img_dir)) if os.path.isdir(os.path.join(img_dir, name)) ]
+print(f' The Indoor Image labels = {IndoorImage_dir}')
+
+# SORT the directories in alphabetical order
+IndoorImage_dir.sort()   
+print(f'\n The SORTED Indoor Image labels = {IndoorImage_dir}')
+
+print(f'\nThere are {len(IndoorImage_dir)} classes of Indoor Images.') ### There are  (67) classes of Indoor Images.
+ The Indoor Image labels = ['airport_inside', 'artstudio', 'auditorium', 'bakery', 'bar', 'bathroom', 'bedroom', 'bookstore', 'bowling', 'buffet', 'casino', 'children_room', 'church_inside', 'classroom', 'cloister', 'closet', 'clothingstore', 'computerroom', 'concert_hall', 'corridor', 'deli', 'dentaloffice', 'dining_room', 'elevator', 'fastfood_restaurant', 'florist', 'gameroom', 'garage', 'greenhouse', 'grocerystore', 'gym', 'hairsalon', 'hospitalroom', 'inside_bus', 'inside_subway', 'jewelleryshop', 'kindergarden', 'kitchen', 'mall', 'meeting_room', 'movietheater', 'museum', 'nursery', 'office', 'operating_room', 'pantry', 'poolinside', 'prisoncell', 'restaurant', 'restaurant_kitchen', 'shoeshop', 'stairscase', 'studiomusic', 'subway', 'toystore', 'trainstation', 'tv_studio', 'videostore', 'waitingroom', 'warehouse', 'winecellar']
+
+ The SORTED Indoor Image labels = ['airport_inside', 'artstudio', 'auditorium', 'bakery', 'bar', 'bathroom', 'bedroom', 'bookstore', 'bowling', 'buffet', 'casino', 'children_room', 'church_inside', 'classroom', 'cloister', 'closet', 'clothingstore', 'computerroom', 'concert_hall', 'corridor', 'deli', 'dentaloffice', 'dining_room', 'elevator', 'fastfood_restaurant', 'florist', 'gameroom', 'garage', 'greenhouse', 'grocerystore', 'gym', 'hairsalon', 'hospitalroom', 'inside_bus', 'inside_subway', 'jewelleryshop', 'kindergarden', 'kitchen', 'mall', 'meeting_room', 'movietheater', 'museum', 'nursery', 'office', 'operating_room', 'pantry', 'poolinside', 'prisoncell', 'restaurant', 'restaurant_kitchen', 'shoeshop', 'stairscase', 'studiomusic', 'subway', 'toystore', 'trainstation', 'tv_studio', 'videostore', 'waitingroom', 'warehouse', 'winecellar']
+
+There are 61 classes of Indoor Images.
+Please check the images quality and remove the bad images if neccessary
+If we don't remove the bad images, the codes will crash and produce errors.
+
+import glob
+img_dir = "C:\\Users\\uchepyala1\\Downloads\\DSCI_419\\indoorCVPR_09\\Images"
+img_paths = glob.glob(os.path.join(img_dir,'*/*.*')) # assuming you point to the directory containing the label folders.
+
+bad_paths = []
+
+for image_path in img_paths:
+    try:
+      img_bytes = tf.io.read_file(image_path)
+      decoded_img = tf.io.decode_image(img_bytes)
+    except tf.errors.InvalidArgumentError as e:
+      print(f"Found bad path {image_path}...{e}")
+      bad_paths.append(image_path)
+
+    #print(f"{image_path}: OK")
+
+print("BAD PATHS:")
+for bad_path in bad_paths:
+    print(f"{bad_path}")
+BAD PATHS:
+Display Images
+import os
+from glob import glob
+import PIL
+
+# Set the seed for reproducible results
+SEED = 777
+os.environ['PYTHONHASHSEED']=str(SEED)
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'  # new flag for tf 2.0+
+random.seed(SEED)
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+
+for i in range(len(IndoorImage_dir)):
+    image_files = glob(os.path.join(img_dir, IndoorImage_dir[i], '*'))
+    img = PIL.Image.open(str(image_files[0]))
+    
+    print(f'(Image size  = ({img.size[0]}, {img.size[1]}, {len(img.mode)}) ; IndoorsPlace = {IndoorImage_dir[i]})')
+    display(img)
+(Image size  = (500, 368, 3) ; IndoorsPlace = airport_inside)
+
+(Image size  = (290, 217, 3) ; IndoorsPlace = artstudio)
+
+(Image size  = (540, 358, 3) ; IndoorsPlace = auditorium)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = bakery)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = bar)
+
+(Image size  = (576, 432, 3) ; IndoorsPlace = bathroom)
+
+(Image size  = (798, 598, 3) ; IndoorsPlace = bedroom)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = bookstore)
+
+(Image size  = (1280, 720, 3) ; IndoorsPlace = bowling)
+
+(Image size  = (560, 353, 3) ; IndoorsPlace = buffet)
+
+(Image size  = (400, 300, 3) ; IndoorsPlace = casino)
+
+(Image size  = (470, 371, 3) ; IndoorsPlace = children_room)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = church_inside)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = classroom)
+
+(Image size  = (690, 499, 3) ; IndoorsPlace = cloister)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = closet)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = clothingstore)
+
+(Image size  = (1024, 768, 3) ; IndoorsPlace = computerroom)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = concert_hall)
+
+(Image size  = (640, 853, 3) ; IndoorsPlace = corridor)
+
+(Image size  = (500, 375, 3) ; IndoorsPlace = deli)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = dentaloffice)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = dining_room)
+
+(Image size  = (1200, 1792, 3) ; IndoorsPlace = elevator)
+
+(Image size  = (1600, 1200, 3) ; IndoorsPlace = fastfood_restaurant)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = florist)
+
+(Image size  = (450, 338, 3) ; IndoorsPlace = gameroom)
+
+(Image size  = (1200, 787, 3) ; IndoorsPlace = garage)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = greenhouse)
+
+(Image size  = (550, 413, 3) ; IndoorsPlace = grocerystore)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = gym)
+
+(Image size  = (604, 453, 3) ; IndoorsPlace = hairsalon)
+
+(Image size  = (1365, 1024, 3) ; IndoorsPlace = hospitalroom)
+
+(Image size  = (2048, 1536, 3) ; IndoorsPlace = inside_bus)
+
+(Image size  = (200, 217, 3) ; IndoorsPlace = inside_subway)
+
+(Image size  = (300, 225, 3) ; IndoorsPlace = jewelleryshop)
+
+(Image size  = (3072, 2304, 3) ; IndoorsPlace = kindergarden)
+
+(Image size  = (798, 598, 3) ; IndoorsPlace = kitchen)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = mall)
+
+(Image size  = (2048, 1536, 3) ; IndoorsPlace = meeting_room)
+
+(Image size  = (400, 300, 3) ; IndoorsPlace = movietheater)
+
+(Image size  = (1772, 1373, 3) ; IndoorsPlace = museum)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = nursery)
+
+(Image size  = (384, 512, 3) ; IndoorsPlace = office)
+
+(Image size  = (1173, 823, 3) ; IndoorsPlace = operating_room)
+
+(Image size  = (289, 356, 3) ; IndoorsPlace = pantry)
+
+(Image size  = (334, 223, 3) ; IndoorsPlace = poolinside)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = prisoncell)
+
+(Image size  = (529, 358, 3) ; IndoorsPlace = restaurant)
+
+(Image size  = (500, 375, 3) ; IndoorsPlace = restaurant_kitchen)
+
+(Image size  = (390, 582, 3) ; IndoorsPlace = shoeshop)
+
+(Image size  = (300, 343, 3) ; IndoorsPlace = stairscase)
+
+(Image size  = (1024, 681, 3) ; IndoorsPlace = studiomusic)
+
+(Image size  = (500, 375, 3) ; IndoorsPlace = subway)
+
+(Image size  = (450, 338, 3) ; IndoorsPlace = toystore)
+
+(Image size  = (500, 375, 3) ; IndoorsPlace = trainstation)
+
+(Image size  = (450, 300, 3) ; IndoorsPlace = tv_studio)
+
+(Image size  = (384, 285, 3) ; IndoorsPlace = videostore)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = waitingroom)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = warehouse)
+
+(Image size  = (256, 256, 3) ; IndoorsPlace = winecellar)
+
+Load & Pre-Process Images
+# RESIZE images to consistent size for TensorFlow to be able to FIT using
+# tf.keras.preprocessing.image_dataset_from_directory (instead of looping)
+# which has 14 Possible parameters that can be set.
+help(tf.keras.preprocessing.image_dataset_from_directory)
+Help on function image_dataset_from_directory in module keras.src.utils.image_dataset:
+
+image_dataset_from_directory(directory, labels='inferred', label_mode='int', class_names=None, color_mode='rgb', batch_size=32, image_size=(256, 256), shuffle=True, seed=None, validation_split=None, subset=None, interpolation='bilinear', follow_links=False, crop_to_aspect_ratio=False, **kwargs)
+    Generates a `tf.data.Dataset` from image files in a directory.
+    
+    If your directory structure is:
+    
+    ```
+    main_directory/
+    ...class_a/
+    ......a_image_1.jpg
+    ......a_image_2.jpg
+    ...class_b/
+    ......b_image_1.jpg
+    ......b_image_2.jpg
+    ```
+    
+    Then calling `image_dataset_from_directory(main_directory,
+    labels='inferred')` will return a `tf.data.Dataset` that yields batches of
+    images from the subdirectories `class_a` and `class_b`, together with labels
+    0 and 1 (0 corresponding to `class_a` and 1 corresponding to `class_b`).
+    
+    Supported image formats: `.jpeg`, `.jpg`, `.png`, `.bmp`, `.gif`.
+    Animated gifs are truncated to the first frame.
+    
+    Args:
+        directory: Directory where the data is located.
+            If `labels` is `"inferred"`, it should contain
+            subdirectories, each containing images for a class.
+            Otherwise, the directory structure is ignored.
+        labels: Either `"inferred"`
+            (labels are generated from the directory structure),
+            `None` (no labels),
+            or a list/tuple of integer labels of the same size as the number of
+            image files found in the directory. Labels should be sorted
+            according to the alphanumeric order of the image file paths
+            (obtained via `os.walk(directory)` in Python).
+        label_mode: String describing the encoding of `labels`. Options are:
+            - `"int"`: means that the labels are encoded as integers
+                (e.g. for `sparse_categorical_crossentropy` loss).
+            - `"categorical"` means that the labels are
+                encoded as a categorical vector
+                (e.g. for `categorical_crossentropy` loss).
+            - `"binary"` means that the labels (there can be only 2)
+                are encoded as `float32` scalars with values 0 or 1
+                (e.g. for `binary_crossentropy`).
+            - `None` (no labels).
+        class_names: Only valid if `labels` is `"inferred"`.
+            This is the explicit list of class names
+            (must match names of subdirectories). Used to control the order
+            of the classes (otherwise alphanumerical order is used).
+        color_mode: One of `"grayscale"`, `"rgb"`, `"rgba"`.
+            Defaults to `"rgb"`. Whether the images will be converted to
+            have 1, 3, or 4 channels.
+        batch_size: Size of the batches of data.
+            If `None`, the data will not be batched
+            (the dataset will yield individual samples). Defaults to 32.
+        image_size: Size to resize images to after they are read from disk,
+            specified as `(height, width)`.
+            Since the pipeline processes batches of images that must all have
+            the same size, this must be provided. Defaults to `(256, 256)`.
+        shuffle: Whether to shuffle the data. Defaults to `True`.
+            If set to `False`, sorts the data in alphanumeric order.
+        seed: Optional random seed for shuffling and transformations.
+        validation_split: Optional float between 0 and 1,
+            fraction of data to reserve for validation.
+        subset: Subset of the data to return.
+            One of `"training"`, `"validation"`, or `"both"`.
+            Only used if `validation_split` is set.
+            When `subset="both"`, the utility returns a tuple of two datasets
+            (the training and validation datasets respectively).
+        interpolation: String, the interpolation method used when
+            resizing images. Defaults to `"bilinear"`.
+            Supports `"bilinear"`, `"nearest"`, `"bicubic"`, `"area"`,
+            `"lanczos3"`, `"lanczos5"`, `"gaussian"`, `"mitchellcubic"`.
+        follow_links: Whether to visit subdirectories pointed to by symlinks.
+            Defaults to `False`.
+        crop_to_aspect_ratio: If `True`, resize the images without aspect
+            ratio distortion. When the original aspect ratio differs from the
+            target aspect ratio, the output image will be cropped so as to
+            return the largest possible window in the image
+            (of size `image_size`) that matches the target aspect ratio. By
+            default (`crop_to_aspect_ratio=False`), aspect ratio may not be
+            preserved.
+        **kwargs: Legacy keyword arguments.
+    
+    Returns:
+    
+    A `tf.data.Dataset` object.
+    
+    - If `label_mode` is `None`, it yields `float32` tensors of shape
+        `(batch_size, image_size[0], image_size[1], num_channels)`,
+        encoding images (see below for rules regarding `num_channels`).
+    - Otherwise, it yields a tuple `(images, labels)`, where `images` has
+        shape `(batch_size, image_size[0], image_size[1], num_channels)`,
+        and `labels` follows the format described below.
+    
+    Rules regarding labels format:
+    
+    - if `label_mode` is `"int"`, the labels are an `int32` tensor of shape
+        `(batch_size,)`.
+    - if `label_mode` is `"binary"`, the labels are a `float32` tensor of
+        1s and 0s of shape `(batch_size, 1)`.
+    - if `label_mode` is `"categorical"`, the labels are a `float32` tensor
+        of shape `(batch_size, num_classes)`, representing a one-hot
+        encoding of the class index.
+    
+    Rules regarding number of channels in the yielded images:
+    
+    - if `color_mode` is `"grayscale"`,
+        there's 1 channel in the image tensors.
+    - if `color_mode` is `"rgb"`,
+        there are 3 channels in the image tensors.
+    - if `color_mode` is `"rgba"`,
+        there are 4 channels in the image tensors.
+
+Setup parameters used to load and process the images which are currently stored as files in a directory.
+# Set some parameters for tf.keras.preprocessing.image_dataset_from_directory
+batch_size = 32
+image_height = 256
+image_width = 256
+split = 0.2       # 0.2 values means 80% train and 20% test        # 0.9 for debug
+TRAIN DATA creation
+train_data = tf.keras.preprocessing.image_dataset_from_directory(
+  img_dir,
+  labels='inferred', # labels are generated from the directory structure
+  label_mode='int',  #'int': means labels are encoded as integers (e.g. for sparse_categorical_crossentropy loss).
+  validation_split= split,
+  subset="training",
+  seed= 1001, # set seed
+  image_size=(image_height, image_width),
+  batch_size=batch_size)
+Found 14056 files belonging to 61 classes.
+Using 11245 files for training.
+VALIDATION DATA creation
+val_data = tf.keras.preprocessing.image_dataset_from_directory(
+  img_dir,
+  labels='inferred',
+  label_mode='int',
+  validation_split= split,
+  subset="validation",
+  seed=1001, # set seed
+  image_size=(image_height, image_width),
+  batch_size=batch_size)
+Found 14056 files belonging to 61 classes.
+Using 2811 files for validation.
+Visualize the Images
+for img, lab in train_data.take(1):
+    print(img[1].numpy().astype("uint16"))
+    print(f'minimum = {np.amin(img[0].numpy().astype("uint16"))}, maximum = {np.amax(img[0].numpy().astype("uint16"))}')
+    break
+[[[ 92  96 121]
+  [ 91  97 121]
+  [ 91  97 119]
+  ...
+  [ 26  54  75]
+  [ 33  61  83]
+  [ 30  58  82]]
+
+ [[ 96 101 126]
+  [ 95 100 124]
+  [ 98 104 126]
+  ...
+  [ 27  55  76]
+  [ 32  60  82]
+  [ 32  60  84]]
+
+ [[101 107 131]
+  [102 108 132]
+  [102 109 131]
+  ...
+  [ 27  55  76]
+  [ 31  60  81]
+  [ 28  56  80]]
+
+ ...
+
+ [[ 13  20  13]
+  [ 13  20  13]
+  [ 13  20  11]
+  ...
+  [ 39  49  51]
+  [ 31  41  43]
+  [ 32  43  45]]
+
+ [[ 13  20  13]
+  [ 11  18  11]
+  [ 14  21  12]
+  ...
+  [ 37  47  49]
+  [ 34  45  47]
+  [ 33  44  46]]
+
+ [[ 12  19  12]
+  [ 10  17  10]
+  [ 12  20  10]
+  ...
+  [ 42  52  54]
+  [ 36  47  49]
+  [ 38  49  51]]]
+minimum = 0, maximum = 255
+Let's display a set of the now uniform images.
+# Plot one set of images in a space
+# 4 images wide X 4 images tall
+
+plt.figure(figsize=(12, 12))
+
+for img, lab in train_data.take(1):
+  for i in range(16):
+    ax = plt.subplot(4, 4, i + 1)
+    plt.imshow(img[i].numpy().astype("uint16"))
+    # Map the label index to name
+    plt.title(IndoorImage_dir[lab[i]]) 
+    plt.axis("off")
+
+Check the shape and size of the image data and the labels.
+# Inspect the shapes of image batch and the labels batch
+#type(train_data)
+# the TF helps us creat the images and label in the dataset
+for image_batch, labels_batch in train_data:
+  print(f'image_batch.shape = {image_batch.shape} \nlabels_batch.shape = {labels_batch.shape } ')
+  break
+
+# image 4d (32batches, 256HEIGHT, 256WIDTH, 3CHANNELS ->COLORS- RGB)
+# image_batch.shape = (32, 256, 256, 3) 
+# labels_batch.shape = (32,) 
+image_batch.shape = (32, 256, 256, 3) 
+labels_batch.shape = (32,) 
+Configure the Dataset for Better performance
+# Apply caching, shuffle, and prefetch 
+# to help increase speed, reduce memory usage, and make processing more efficient
+
+AUTOTUNE = tf.data.AUTOTUNE # Tune the value dynamically at runtime.
+
+train_data = train_data.cache().shuffle(1000).prefetch(buffer_size=AUTOTUNE)
+val_data = val_data.cache().prefetch(buffer_size=AUTOTUNE)
+Normalize the Data
+# Typically the pixel values using 8 bits in the memoery, it denotes 2*2*..*2 =2^8 = 256 unique vlaues
+# since Python starts from 0, 1, 2, ..., 255
+#Normalize the pixel value to a number between 0 and 1 (instead of 0 and 255)
+normalization_layer = tf.keras.layers.experimental.preprocessing.Rescaling(1.0/255.0)
+WARNING:tensorflow:From C:\Users\uchepyala1\AppData\Local\anaconda3\Lib\site-packages\keras\src\backend.py:873: The name tf.get_default_graph is deprecated. Please use tf.compat.v1.get_default_graph instead.
+
+Please build the CNN models based on the datasets. Then call the model fit funciton using something like
+
+%%time callback = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', patience= 5) epochs= 100 history = model.fit( train_data, validation_data=val_data, epochs=epochs, callbacks=[callback], verbose = 1 )
+
+# Set the seed for reproducible results
+SEED = 777
+os.environ['PYTHONHASHSEED'] = str(SEED)
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+random.seed(SEED)
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+
+# Set some parameters for tf.keras.preprocessing.image_dataset_from_directory
+batch_size = 32
+image_height = 256
+image_width = 256
+split = 0.1  # Use only 10% of the dataset for training
+
+# Load the dataset
+train_data = tf.keras.preprocessing.image_dataset_from_directory(
+    img_dir,
+    labels='inferred',
+    label_mode='int',
+    validation_split=split,
+    subset="training",
+    seed=1001,
+    image_size=(image_height, image_width),
+    batch_size=batch_size)
+
+val_data = tf.keras.preprocessing.image_dataset_from_directory(
+    img_dir,
+    labels='inferred',
+    label_mode='int',
+    validation_split=split,
+    subset="validation",
+    seed=1001,
+    image_size=(image_height, image_width),
+    batch_size=batch_size)
+Found 14056 files belonging to 61 classes.
+Using 12651 files for training.
+Found 14056 files belonging to 61 classes.
+Using 1405 files for validation.
+# Configure the Dataset for Better performance
+AUTOTUNE = tf.data.AUTOTUNE
+train_data = train_data.cache().shuffle(1000).prefetch(buffer_size=AUTOTUNE)
+val_data = val_data.cache().prefetch(buffer_size=AUTOTUNE)
+
+# Normalize the Data
+normalization_layer = layers.experimental.preprocessing.Rescaling(1.0 / 255.0)
+# Define Baseline CNN Model
+baseline_model = models.Sequential([
+    layers.experimental.preprocessing.Rescaling(1.0 / 255, input_shape=(image_height, image_width, 3)),
+    layers.Conv2D(16, 3, padding='same', activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Conv2D(32, 3, padding='same', activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Conv2D(64, 3, padding='same', activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Flatten(),
+    layers.Dense(128, activation='relu'),
+    layers.Dense(len(IndoorImage_dir))  # Output layer with number of classes
+])
+
+# Compile the model
+baseline_model.compile(optimizer='adam',
+                       loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+                       metrics=['accuracy'])
+
+# Train the model
+history_baseline = baseline_model.fit(
+    train_data,
+    validation_data=val_data,
+    epochs=3  # Adjust the number of epochs as needed
+)
+Epoch 1/3
+396/396 [==============================] - 181s 452ms/step - loss: 3.7204 - accuracy: 0.1007 - val_loss: 3.4868 - val_accuracy: 0.1409
+Epoch 2/3
+396/396 [==============================] - 182s 460ms/step - loss: 3.0975 - accuracy: 0.2095 - val_loss: 3.0986 - val_accuracy: 0.2206
+Epoch 3/3
+396/396 [==============================] - 180s 454ms/step - loss: 2.3772 - accuracy: 0.3655 - val_loss: 3.1237 - val_accuracy: 0.2427
+# Define Second CNN Model with Data Augmentation and Dropout
+data_augmentation = tf.keras.Sequential([
+    layers.experimental.preprocessing.RandomFlip('horizontal'),
+    layers.experimental.preprocessing.RandomRotation(0.2),
+    layers.experimental.preprocessing.RandomZoom(0.1),
+])
+
+dropout_model = models.Sequential([
+    data_augmentation,
+    layers.experimental.preprocessing.Rescaling(1.0 / 255, input_shape=(image_height, image_width, 3)),
+    layers.Conv2D(16, 3, padding='same', activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Conv2D(32, 3, padding='same', activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Conv2D(64, 3, padding='same', activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Dropout(0.2),  # Dropout layer added
+    layers.Flatten(),
+    layers.Dense(128, activation='relu'),
+    layers.Dense(len(IndoorImage_dir))
+])
+
+# Compile the model
+dropout_model.compile(optimizer='adam',
+                      loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+                      metrics=['accuracy'])
+
+# Train the model
+history_dropout = dropout_model.fit(
+    train_data,
+    validation_data=val_data,
+    epochs=3  # Adjust the number of epochs as needed
+)
+Epoch 1/3
+396/396 [==============================] - 214s 533ms/step - loss: 3.6606 - accuracy: 0.1059 - val_loss: 3.5007 - val_accuracy: 0.1231
+Epoch 2/3
+396/396 [==============================] - 232s 585ms/step - loss: 3.3133 - accuracy: 0.1593 - val_loss: 3.2136 - val_accuracy: 0.1829
+Epoch 3/3
+396/396 [==============================] - 236s 596ms/step - loss: 3.1518 - accuracy: 0.1869 - val_loss: 3.1247 - val_accuracy: 0.2256
+# Define Third CNN Model based on Pre-trained Model (Transfer Learning)
+pretrained_model = tf.keras.applications.ResNet50(
+    include_top=False,
+    weights='imagenet',
+    input_shape=(image_height, image_width, 3)
+)
+
+# Freeze the pretrained model layers
+pretrained_model.trainable = False
+
+# Create a new model on top
+pretrained_model_transfer = models.Sequential([
+    pretrained_model,
+    layers.GlobalAveragePooling2D(),
+    layers.Dense(128, activation='relu'),
+    layers.Dropout(0.2),  # Dropout layer added
+    layers.Dense(len(IndoorImage_dir))
+])
+
+# Compile the model
+pretrained_model_transfer.compile(optimizer='adam',
+                                  loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+                                  metrics=['accuracy'])
+
+# Train the model
+history_transfer = pretrained_model_transfer.fit(
+    train_data,
+    validation_data=val_data,
+    epochs=3  # Adjust the number of epochs as needed
+)
+Epoch 1/3
+396/396 [==============================] - 997s 3s/step - loss: 2.0568 - accuracy: 0.4672 - val_loss: 1.2445 - val_accuracy: 0.6342
+Epoch 2/3
+396/396 [==============================] - 980s 2s/step - loss: 1.2153 - accuracy: 0.6534 - val_loss: 1.0628 - val_accuracy: 0.6769
+Epoch 3/3
+396/396 [==============================] - 972s 2s/step - loss: 0.9788 - accuracy: 0.7090 - val_loss: 0.9400 - val_accuracy: 0.7281
+# Load the test dataset
+test_data = tf.keras.preprocessing.image_dataset_from_directory(
+    "C:\\Users\\uchepyala1\\Downloads\\DSCI_419\\indoorCVPR_09\\Images",
+    labels='inferred',
+    label_mode='int',
+    image_size=(image_height, image_width),
+    batch_size=batch_size
+)
+Found 14056 files belonging to 61 classes.
+# Normalize the test data
+test_data = test_data.map(lambda x, y: (normalization_layer(x), y))
+# Evaluate the Baseline CNN Model
+baseline_loss, baseline_accuracy = baseline_model.evaluate(test_data)
+print("Baseline CNN Model - Test Accuracy:", baseline_accuracy)
+
+# Evaluate the CNN Model with Dropout and Data Augmentation
+dropout_loss, dropout_accuracy = dropout_model.evaluate(test_data)
+print("CNN Model with Dropout and Data Augmentation - Test Accuracy:", dropout_accuracy)
+
+# Evaluate the CNN Model with Transfer Learning
+transfer_loss, transfer_accuracy = pretrained_model_transfer.evaluate(test_data)
+print("CNN Model with Transfer Learning - Test Accuracy:", transfer_accuracy)
+440/440 [==============================] - 58s 131ms/step - loss: 8.1019 - accuracy: 0.0383
+Baseline CNN Model - Test Accuracy: 0.03834661468863487
+440/440 [==============================] - 73s 164ms/step - loss: 7.7512 - accuracy: 0.0383
+CNN Model with Dropout and Data Augmentation - Test Accuracy: 0.03834661468863487
+440/440 [==============================] - 1071s 2s/step - loss: 6.6075 - accuracy: 0.0072
+CNN Model with Transfer Learning - Test Accuracy: 0.007185543421655893
+ 
